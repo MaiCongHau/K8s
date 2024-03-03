@@ -1,0 +1,136 @@
+# mysql
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv1
+  labels:
+    name: pv1
+spec:
+  storageClassName: mystoragedb #giống với PVC
+  capacity:
+    storage: 1Gi
+  accessModes:
+  - ReadWriteOnce
+  hostPath:
+    path: "/PV" #sử dụng thư mục trong các node để làm ổ đĩa
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc1
+  labels:
+    name: pvc1
+spec:
+  storageClassName: mystoragedb #giống với PV
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 150Mi
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mysql-secret
+type: kubernetes.io/basic-auth
+stringData:
+  username: root #username MYSQL
+  password: test123 #Pass MYSQL
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql
+  labels:
+    app: mysql
+spec:
+  replicas: 1
+  serviceName: "mysql"
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+      - image: mysql:8.0
+        name: mysql
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret #secret key nhé
+              key: password
+        ports:
+        - containerPort: 3306
+          name: mysql
+        volumeMounts:
+        - name: pv1
+          mountPath: /var/lib/mysql
+      volumes:
+      - name: pv1
+        persistentVolumeClaim:
+          claimName: pvc1
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  labels:
+    app: mysql
+spec:
+  ports:
+  - port: 3306
+    targetPort: 3306
+    name: mysql
+  selector:
+    app: mysql
+  type: ClusterIP
+
+# phpmyadmin
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: phpmyadmin
+  labels:
+    app: phpmyadmin
+spec:
+  containers:
+  - name: phpmyadmin
+    image: phpmyadmin/phpmyadmin
+    ports:
+    - containerPort: 80 #POD của container
+    env:
+    - name: PMA_HOST
+      value: mysql
+    - name: PMA_PORT
+      value: "3306"
+    - name: MYSQL_ROOT_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: mysql-secret #secret key nhé
+          key: password
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: svcphpmyadmin
+spec:
+  type: NodePort
+  selector:
+    app: phpmyadmin # Tên labels của pod tương ứng
+  ports:
+  - name: phpmyadmin #tên để dễ phân biệt 
+    port: 80 #port của service  
+    targetPort: 80 #port của pod -> container
+    nodePort: 30001 #Port của node
+
+

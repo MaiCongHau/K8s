@@ -1,0 +1,23 @@
+Vagrant.configure("2") do |config|
+    config.vm.box = "generic/ubuntu2004"
+    config.vm.box_version = "4.2.12"
+    config.vm.hostname = "worker-node-1"
+    config.vm.network "private_network", ip: "172.16.129.130"
+    config.vm.provider "virtualbox" do |v|
+        v.name = "worker-node-1"
+        v.memory = 2800
+        v.cpus = 2;
+    end
+    config.vm.provision "shell" do |s|
+      config.vm.provision "shell", path: "./install.sh"
+      ssh_pub_key = File.readlines("#{Dir.home}/.ssh/worker_node_1/id_rsa.pub").first.strip
+      s.inline = <<-SHELL
+          # Create ci user
+          useradd -s /bin/bash -d /home/ci/ -m -G sudo ci
+          echo 'ci ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
+          mkdir -p /home/ci/.ssh && chown -R ci /home/ci/.ssh
+          echo #{ssh_pub_key} >> /home/ci/.ssh/authorized_keys
+      SHELL
+    end
+  end
+  
